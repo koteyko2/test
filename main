@@ -1,0 +1,102 @@
+from collections import deque
+
+# Вопрос 1
+
+def is_even(value):
+    return (value & 1) == 0
+
+# Плюсы моего варианта:
+#     - Выше производительность, тк проверяется только последний бит числа
+# Минусы моего варианта:
+#     - Менее удобочитаемый код
+#
+# Плюсы вашего варианта:
+#     - Удобочитаемость
+# Минусы вашего варианта:
+#     - Ниже производительность
+
+---------------------------------------------------------------------------------
+
+# Вопрос 2
+# Вариант со списком
+# Простота в понимании и более обширный контроль буфера
+
+class CircularBufferList:
+    def __init__(self, size):
+        self.size = size
+        self.buffer = [None] * size
+        self.head = 0
+        self.tail = 0
+        self.count = 0
+
+    # Проверка на заполненность
+    def is_full(self):
+        return self.count == self.size
+
+    # Проверка на пустоту
+    def is_empty(self):
+        return self.count == 0
+
+    # Добавление эл-та
+    def enqueue(self, item):
+        if self.is_full():
+            raise OverflowError("Буфер полон!")
+        self.buffer[self.tail] = item
+        self.tail = (self.tail + 1) % self.size
+        self.count += 1
+
+    # Удаление эл-та
+    def dequeue(self):
+        if self.is_empty():
+            raise IndexError("Буфер пуст!")
+        item = self.buffer[self.head]
+        self.buffer[self.head] = None
+        self.head = (self.head + 1) % self.size
+        self.count -= 1
+        return item
+
+    def __repr__(self):
+        if self.is_empty():
+            return "Циклический буфер([])"
+        return f"Циклический буфер({self.buffer[self.head:self.tail]})"
+
+# Вариант с deque
+# Более высокая производительность, компактность кода
+
+
+class CircularBufferDeque:
+    def __init__(self, size):
+        self.buffer = deque(maxlen=size)
+
+    # Проверка на заполненность
+    def is_full(self):
+        return len(self.buffer) == self.buffer.maxlen
+
+    # Проверка на пустоту
+    def is_empty(self):
+        return len(self.buffer) == 0
+
+    # Добавление эл-та
+    def enqueue(self, item):
+        if self.is_full():
+            raise OverflowError("Буфер полон!")
+        self.buffer.append(item)
+
+    # Удаление эл-та
+    def dequeue(self):
+        if self.is_empty():
+            raise IndexError("Буфер пуст!")
+        return self.buffer.popleft()
+
+    def __repr__(self):
+        return f"Циклический буфер({list(self.buffer)})"
+
+---------------------------------------------------------------------------------
+
+# Вопрос 3
+# Алгоритм сортировки TimSort через встроенный метод sorted является более
+# стабильным, компактным и удобным в понимании и чтении в отличие от того
+# же QuickSort, который может дать незначительную разницу в скорости
+
+def efficient_sort(arr):
+    return sorted(arr)
