@@ -1,0 +1,486 @@
+import arcade
+import random
+import time
+
+SCREEN_WIDTH = 1280
+SCREEN_HEIGHT = 720
+SCREEN_TITLE = "Vagabond"
+
+FONT_SIZE = 30
+FONT_NAME = ("PIXY")
+
+GRAVITY = 1.2
+
+TILE_SCALING = 1
+LAYER_NAME_BACKGROUND = "Background"
+LAYER_NAME_FOREGROUND = "Foreground"
+LAYER_NAME_FLOORS = "Floor"
+LAYER_NAME_DONT_TOUCH = "Lava"
+LAYER_NAME_BLOOD = "Blood"
+LAYER_NAME_HINTS = "Hints"
+
+MAIN_CHAR_SCALING = 0.4
+MAIN_CHAR_START_X = 200
+MAIN_CHAR_START_Y = 600
+MAIN_CHAR_MOVEMENT_SPEED = 5
+MAIN_CHAR_JUMP_SPEED = 20
+MAIN_CHAR_DODGE_DISTANCE = 250
+MAIN_CHAR_ATTACK_DISTANCE = 50
+
+BLOOD_SAMURAI_SCALING = 0.5
+BLOOD_SAMURAI_MOVEMENT_SPEED = 3
+
+PORTAL_SCALING = 0.4
+
+
+class MyGame(arcade.Window):
+
+    def __init__(self):
+        super().__init__(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_TITLE)
+
+        self.scene = None
+        self.custom_font = arcade.load_font("fonts/PIXY.ttf")
+
+        self.camera = None
+        self.gui_camera = None
+        self.paused = False
+        self.level = 1
+
+        self.score = None
+        self.score_icon = arcade.load_texture("sprites/sash.png")
+        self.button_icon = arcade.load_texture("sprites/button_icon.png")
+        self.skill_sprite = None
+        self.portal_sprite = None
+
+        self.physics_engine = None
+        self.is_jumping = None
+        self.is_facing_right = True
+        self.main_char_is_dead = None
+        self.return_scheduled = None
+        self.jump_count = 0
+        self.last_teleport_time = 0
+        self.teleport_cooldown = 1
+        self.is_using_skill = False
+
+        self.tile_map = None
+        self.coolide = False
+
+        self.song_1 = arcade.load_sound("sounds/8. LudoWic - Overdose.mp3")
+        self.collect_blood_sound = arcade.load_sound("sounds/sash_collecting.mp3")
+        self.jump_sound = arcade.load_sound("sounds/jump.mp3")
+        self.attack_1_sound = arcade.load_sound("sounds/attack_1.mp3")
+        self.attack_2_sound = arcade.load_sound("sounds/attack_2.mp3")
+        self.teleport_1_sound = arcade.load_sound("sounds/teleport_1.mp3")
+        self.teleport_2_sound = arcade.load_sound("sounds/teleport_2.mp3")
+        self.power_sound = arcade.load_sound("sounds/power.mp3")
+        self.enemy_death_sound = arcade.load_sound("sounds/enemy_death.mp3")
+
+        arcade.play_sound(self.song_1, looping=True)
+
+
+    def setup(self):
+        self.scene = arcade.Scene()
+
+        self.camera = arcade.Camera(self.width, self.height)
+
+        self.gui_camera = arcade.Camera(self.width, self.height)
+        self.score = 0
+
+        map_name = f"levels/map_{self.level}.tmx"
+        layer_options = {
+            LAYER_NAME_FLOORS: {
+                "use_spatial_hash": True,
+            },
+            LAYER_NAME_DONT_TOUCH: {
+                "use_spatial_hash": True,
+            },
+            LAYER_NAME_BLOOD: {
+                "use_spatial_hash": True,
+            },
+            LAYER_NAME_HINTS: {
+                "use_spatial_hash": True,
+            }
+        }
+
+        self.tile_map = arcade.load_tilemap(map_name, TILE_SCALING, layer_options)
+        self.scene = arcade.Scene.from_tilemap(self.tile_map)
+
+        self.scene.add_sprite_list("Main Character")
+        self.scene.add_sprite_list("Blood Samurai")
+        self.main_char_is_dead = False
+        self.main_char_sprite = arcade.Sprite("sprites/main_char.png", MAIN_CHAR_SCALING)
+        self.main_char_reverse_sprite = arcade.Sprite("sprites/main_char.png", MAIN_CHAR_SCALING, flipped_horizontally=True)
+        self.main_char_jump_1_sprite = arcade.Sprite("sprites/main_char_jump_1.png", MAIN_CHAR_SCALING)
+        self.main_char_jump_1_reverse_sprite = arcade.Sprite("sprites/main_char_jump_1.png", MAIN_CHAR_SCALING, flipped_horizontally=True)
+        self.main_char_jump_2_sprite = arcade.Sprite("sprites/main_char_jump_2.png", MAIN_CHAR_SCALING)
+        self.main_char_jump_2_reverse_sprite = arcade.Sprite("sprites/main_char_jump_2.png", MAIN_CHAR_SCALING, flipped_horizontally=True)
+        self.main_char_skill_sprite = arcade.Sprite("sprites/main_char_skill.png", MAIN_CHAR_SCALING)
+        self.main_char_skill_reverse_sprite = arcade.Sprite("sprites/main_char_skill.png", MAIN_CHAR_SCALING, flipped_horizontally=True)
+        self.main_char_power_1_sprite = arcade.Sprite("sprites/main_char_power_1.png", MAIN_CHAR_SCALING)
+        self.main_char_power_1_reverse_sprite = arcade.Sprite("sprites/main_char_power_1.png", MAIN_CHAR_SCALING, flipped_horizontally=True)
+        self.main_char_power_2_sprite = arcade.Sprite("sprites/main_char_power_2.png", MAIN_CHAR_SCALING)
+        self.main_char_power_2_reverse_sprite = arcade.Sprite("sprites/main_char_power_2.png", MAIN_CHAR_SCALING, flipped_horizontally=True)
+        self.main_char_attack_1_sprite = arcade.Sprite("sprites/main_char_attack_1.png", MAIN_CHAR_SCALING)
+        self.main_char_attack_1_reverse_sprite = arcade.Sprite("sprites/main_char_attack_1.png", MAIN_CHAR_SCALING, flipped_horizontally=True)
+        self.main_char_attack_2_sprite = arcade.Sprite("sprites/main_char_attack_2.png", MAIN_CHAR_SCALING)
+        self.main_char_attack_2_reverse_sprite = arcade.Sprite("sprites/main_char_attack_2.png", MAIN_CHAR_SCALING, flipped_horizontally=True)
+        self.main_char_death_sprite = arcade.Sprite("sprites/main_char_death.png", MAIN_CHAR_SCALING)
+
+        self.main_char_sprite.center_x = MAIN_CHAR_START_X
+        self.main_char_sprite.center_y = MAIN_CHAR_START_Y
+        self.scene.add_sprite("Main Character", self.main_char_sprite)
+
+        self.blood_samurai_sprite = arcade.Sprite("sprites/blood_samurai.png", BLOOD_SAMURAI_SCALING)
+        self.blood_samurai_reverse_sprite = arcade.Sprite("sprites/blood_samurai.png", BLOOD_SAMURAI_SCALING, flipped_horizontally=True)
+        self.blood_samurai_sprite.center_x = 1400
+        self.blood_samurai_sprite.center_y = 545
+        self.scene.add_sprite("Blood Samurai", self.blood_samurai_sprite)
+
+        self.physics_engine = arcade.PhysicsEnginePlatformer(
+            self.main_char_sprite, gravity_constant = GRAVITY, walls=self.scene[LAYER_NAME_FLOORS]
+        )
+
+        self.portal_sprite = arcade.Sprite("sprites/portal.png", PORTAL_SCALING)
+        self.portal_sprite.center_x = 100
+        self.portal_sprite.center_y = 1150
+        self.scene.add_sprite("Portal", self.portal_sprite)
+
+
+    def def_calculate_collision(self, sprite1, sprite2):
+        left1 = sprite1.center_x - sprite1.width / 4
+        right1 = sprite1.center_x + sprite1.width / 4
+        top1 = sprite1.center_y + sprite1.height / 4
+        bottom1 = sprite1.center_y - sprite1.height / 4
+
+        left2 = sprite2.center_x - sprite2.width / 4
+        right2 = sprite2.center_x + sprite2.width / 4
+        top2 = sprite2.center_y + sprite2.height / 4
+        bottom2 = sprite2.center_y - sprite2.height / 4
+
+        return not (right1 < left2 or
+                    left1 > right2 or
+                    top1 < bottom2 or
+                    bottom1 > top2)
+
+
+    def center_camera_to_player(self):
+        camera_speed = 0.1
+
+        target_x = self.main_char_sprite.center_x - (self.camera.viewport_width / 2)
+        target_y = self.main_char_sprite.center_y - (self.camera.viewport_height / 3)
+
+        map_width = self.tile_map.width * self.tile_map.tile_width
+        map_height = self.tile_map.height * self.tile_map.tile_height
+
+        camera_x = self.camera.position[0] + (target_x - self.camera.position[0]) * camera_speed
+        camera_y = self.camera.position[1] + (target_y - self.camera.position[1]) * camera_speed
+
+        if camera_x < 0:
+            camera_x = 0
+        elif camera_x > map_width - self.camera.viewport_width:
+            camera_x = map_width - self.camera.viewport_width
+
+        if camera_y < 0:
+            camera_y = 0
+        elif camera_y > map_height - self.camera.viewport_height:
+            camera_y = map_height - self.camera.viewport_height
+
+        self.camera.move_to((camera_x, camera_y))
+
+
+    def reset_main_char(self):
+        self.main_char_sprite.center_x = MAIN_CHAR_START_X
+        self.main_char_sprite.center_y = MAIN_CHAR_START_Y
+        self.main_char_sprite.change_x = 0
+        self.main_char_sprite.change_y = 0
+        self.is_facing_right = True
+        self.is_jumping = False
+        self.main_char_is_dead = False
+        self.score = 0
+
+        self.setup()
+
+
+    def on_mouse_press(self, x, y, button, modifiers):
+
+        if self.main_char_is_dead:
+            return
+
+        if button == arcade.MOUSE_BUTTON_LEFT:
+            if self.is_facing_right == True:
+                self.main_char_sprite.texture = self.main_char_attack_1_sprite.texture
+            else:
+                self.main_char_sprite.texture = self.main_char_attack_1_reverse_sprite.texture
+
+        elif button == arcade.MOUSE_BUTTON_RIGHT and self.score >= 2:
+            self.paused = True
+            if self.is_facing_right:
+                self.main_char_sprite.texture = self.main_char_power_1_sprite.texture
+            else:
+                self.main_char_sprite.texture = self.main_char_power_1_reverse_sprite.texture
+
+
+        arcade.play_sound(self.attack_1_sound)
+
+    def return_to_normal(self, delta_time):
+        if self.is_facing_right:
+            self.main_char_sprite.texture = arcade.load_texture("sprites/main_char.png")
+        else:
+            self.main_char_sprite.texture = self.main_char_reverse_sprite.texture
+
+        self.return_scheduled = False
+        arcade.unschedule(self.return_to_normal)
+
+
+    def on_mouse_release(self, x, y, button, modifiers):
+
+        if self.main_char_is_dead:
+            return
+
+        if button == arcade.MOUSE_BUTTON_LEFT:
+            self.is_using_skill = True
+            if self.is_facing_right == True:
+                self.main_char_sprite.center_x += MAIN_CHAR_ATTACK_DISTANCE
+                self.main_char_sprite.texture = self.main_char_attack_2_sprite.texture
+                if self.def_calculate_collision(self.main_char_sprite, self.blood_samurai_sprite):
+                    self.blood_samurai_sprite.remove_from_sprite_lists()
+                    arcade.play_sound(self.enemy_death_sound)
+            else:
+                self.main_char_sprite.center_x -= MAIN_CHAR_ATTACK_DISTANCE
+                self.main_char_sprite.texture = self.main_char_attack_2_reverse_sprite.texture
+                if self.def_calculate_collision(self.main_char_reverse_sprite, self.blood_samurai_reverse_sprite):
+                    self.blood_samurai_sprite.remove_from_sprite_lists()
+                    arcade.play_sound(self.enemy_death_sound)
+
+            if not self.return_scheduled:
+                    arcade.schedule(self.return_to_normal, 0.5)
+                    self.return_scheduled = True
+
+            arcade.play_sound(self.attack_2_sound)
+
+        elif button == arcade.MOUSE_BUTTON_RIGHT and self.score >= 2:
+            self.is_using_skill = True
+            self.paused = False
+            if self.is_facing_right:
+                self.main_char_sprite.texture = self.main_char_power_2_sprite.texture
+                self.main_char_sprite.center_x += 400
+                if self.def_calculate_collision(self.main_char_sprite, self.blood_samurai_sprite):
+                    self.blood_samurai_sprite.remove_from_sprite_lists()
+                    arcade.play_sound(self.enemy_death_sound)
+            else:
+                self.main_char_sprite.texture = self.main_char_power_2_reverse_sprite.texture
+                self.main_char_sprite.center_x -= 400
+                if self.def_calculate_collision(self.main_char_reverse_sprite, self.blood_samurai_reverse_sprite):
+                    self.blood_samurai_sprite.remove_from_sprite_lists()
+                    arcade.play_sound(self.enemy_death_sound)
+
+            if not self.return_scheduled:
+                    arcade.schedule(self.return_to_normal, 0.5)
+                    self.return_scheduled = True
+
+            self.score -= 2
+            arcade.play_sound(self.power_sound)
+
+
+    def on_key_press(self, key, modifiers):
+        if key == arcade.key.R and self.main_char_is_dead:
+            self.reset_main_char()
+
+        if self.main_char_is_dead:
+            return
+
+        if self.paused:
+            return
+
+        if key == arcade.key.ESCAPE:
+            self.set_fullscreen(not self.fullscreen)
+
+        if key == arcade.key.UP or key == arcade.key.SPACE:
+            if self.jump_count < 2:
+                self.jump_count += 1
+                if self.is_facing_right:
+                    self.main_char_sprite.texture = self.main_char_jump_1_sprite.texture
+                else:
+                    self.main_char_sprite.texture = self.main_char_jump_1_reverse_sprite.texture
+
+                if key == arcade.key.SPACE and self.is_jumping:
+                    self.main_char_sprite.change_y = MAIN_CHAR_JUMP_SPEED
+                    if self.is_facing_right:
+                        self.main_char_sprite.texture = self.main_char_jump_2_sprite.texture
+                    else:
+                        self.main_char_sprite.texture = self.main_char_jump_2_reverse_sprite.texture
+
+                    arcade.play_sound(self.jump_sound)
+
+        elif key == arcade.key.DOWN or key == arcade.key.S:
+            if self.is_facing_right:
+                self.main_char_sprite.texture = self.main_char_jump_1_sprite.texture
+            else:
+                self.main_char_sprite.texture = self.main_char_jump_1_reverse_sprite.texture
+
+        elif key == arcade.key.LSHIFT:
+            current_time = time.time()
+            if current_time - self.last_teleport_time >= self.teleport_cooldown:
+                if self.is_facing_right:
+                    self.main_char_sprite.texture = self.main_char_skill_sprite.texture
+                else:
+                    self.main_char_sprite.texture = self.main_char_skill_reverse_sprite.texture
+
+                arcade.play_sound(self.teleport_1_sound)
+
+
+        elif key == arcade.key.LEFT or key == arcade.key.A:
+            self.is_facing_right = False
+            self.main_char_sprite.change_x = -MAIN_CHAR_MOVEMENT_SPEED
+            if not self.is_jumping:
+                self.main_char_sprite.texture = self.main_char_reverse_sprite.texture
+
+        elif key == arcade.key.RIGHT or key == arcade.key.D:
+            self.is_facing_right = True
+            self.main_char_sprite.change_x = MAIN_CHAR_MOVEMENT_SPEED
+            if not self.is_jumping:
+                self.main_char_sprite.texture = arcade.load_texture("sprites/main_char.png")
+
+    def on_key_release(self, key, modifiers):
+        if self.main_char_is_dead:
+            return
+
+        if key == arcade.key.UP or key == arcade.key.SPACE:
+            if self.physics_engine.can_jump():
+                self.is_jumping = True
+                self.main_char_sprite.change_y = MAIN_CHAR_JUMP_SPEED
+                if self.is_facing_right:
+                    self.main_char_sprite.texture = self.main_char_jump_2_sprite.texture
+                else:
+                    self.main_char_sprite.texture = self.main_char_jump_2_reverse_sprite.texture
+
+                arcade.play_sound(self.jump_sound)
+
+        elif key == arcade.key.LSHIFT:
+            current_time = time.time()
+            if current_time - self.last_teleport_time >= self.teleport_cooldown:
+                self.last_teleport_time = current_time
+                if self.is_facing_right:
+                    self.main_char_sprite.texture = arcade.load_texture("sprites/main_char.png")
+                    self.main_char_sprite.center_x += MAIN_CHAR_DODGE_DISTANCE
+                else:
+                    self.main_char_sprite.texture = self.main_char_reverse_sprite.texture
+                    self.main_char_sprite.center_x -= MAIN_CHAR_DODGE_DISTANCE
+
+                arcade.play_sound(self.teleport_2_sound)
+
+        elif key == arcade.key.DOWN or key == arcade.key.S:
+            self.main_char_sprite.texture = arcade.load_texture("sprites/main_char.png")
+
+        elif key == arcade.key.LEFT or key == arcade.key.A:
+            self.main_char_sprite.change_x = 0
+            if not self.is_jumping:
+                self.main_char_sprite.texture = self.main_char_reverse_sprite.texture
+
+        elif key == arcade.key.RIGHT or key == arcade.key.D:
+            self.main_char_sprite.change_x = 0
+            if not self.is_jumping:
+                self.main_char_sprite.texture = arcade.load_texture("sprites/main_char.png")
+
+    def on_update(self, delta_time):
+
+        self.physics_engine.update()
+        self.center_camera_to_player()
+
+        if self.paused:
+            return
+
+        lava_hit_list = arcade.check_for_collision_with_list(
+            self.main_char_sprite, self.scene[LAYER_NAME_DONT_TOUCH]
+        )
+        if lava_hit_list:
+            self.main_char_is_dead = True
+            self.main_char_sprite.change_x = 0
+            self.main_char_sprite.change_y = 0
+            self.main_char_sprite.texture = self.main_char_death_sprite.texture
+
+        if not self.physics_engine.can_jump() and not self.is_jumping:
+            self.is_jumping = True
+        elif self.physics_engine.can_jump() and self.is_jumping:
+            self.jump_count = 0
+            if self.is_facing_right == True:
+                self.main_char_sprite.texture = arcade.load_texture("sprites/main_char.png")
+            else:
+                self.main_char_sprite.texture = self.main_char_reverse_sprite.texture
+
+            self.is_jumping = False
+
+        if self.main_char_sprite.center_x < self.blood_samurai_sprite.center_x:
+            self.blood_samurai_sprite.center_x -= BLOOD_SAMURAI_MOVEMENT_SPEED
+            self.blood_samurai_sprite.texture = self.blood_samurai_reverse_sprite.texture
+        else:
+            self.blood_samurai_sprite.center_x += BLOOD_SAMURAI_MOVEMENT_SPEED
+            self.blood_samurai_sprite.texture = arcade.load_texture("sprites/blood_samurai.png")
+
+        blood_hit_list = arcade.check_for_collision_with_list(self.main_char_sprite, self.scene[LAYER_NAME_BLOOD])
+        for blood in blood_hit_list:
+            blood.remove_from_sprite_lists()
+            arcade.play_sound(self.collect_blood_sound)
+            self.score += 1
+
+        if self.def_calculate_collision(self.main_char_sprite, self.portal_sprite):
+            self.level += 1
+            self.setup()
+
+        if self.def_calculate_collision(self.main_char_sprite, self.blood_samurai_sprite):
+            if self.is_using_skill:
+                return
+            else:
+                self.main_char_is_dead = True
+                self.main_char_sprite.change_x = 0
+                self.main_char_sprite.change_y = 0
+                self.main_char_sprite.texture = self.main_char_death_sprite.texture
+
+
+    def on_draw(self):
+
+        self.clear()
+        self.camera.use()
+        self.scene.draw()
+
+        self.scene[LAYER_NAME_FOREGROUND].draw()
+
+        self.gui_camera.use()
+
+        score_text = f"Blood obtained: {self.score}"
+        arcade.draw_text(
+            score_text,
+            110,
+            650,
+            arcade.color.WHITE,
+            FONT_SIZE,
+            font_name="PIXY"
+        )
+
+        score_icon_widht = 100
+        score_icon_height = 100
+        arcade.draw_texture_rectangle(
+            65, 665, score_icon_widht, score_icon_height, self.score_icon
+        )
+
+        if self.main_char_is_dead:
+            arcade.draw_text(
+                "Press 'R' to restart",
+                SCREEN_WIDTH / 2,
+                SCREEN_HEIGHT / 2,
+                arcade.color.WHITE,
+                FONT_SIZE - 5,
+                font_name="PIXY",
+                anchor_x="center",
+                anchor_y="center"
+            )
+
+
+def main():
+    window = MyGame()
+    window.setup()
+    arcade.run()
+
+
+if __name__ == "__main__":
+    main()
